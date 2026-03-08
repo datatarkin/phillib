@@ -1,0 +1,154 @@
+import Init.Classical
+open Classical
+
+inductive Formula (PROP : Type) : Type
+  | var   (p : PROP)
+  | imp   (φ ψ : Formula PROP)
+  | box   (φ : Formula PROP)
+  | false_
+
+namespace Formula
+
+  def neg (φ : Formula PROP) : Formula PROP := imp φ false_
+
+  def true_ : Formula PROP := neg false_
+
+  def and (φ ψ : Formula PROP) : Formula PROP := neg (imp φ (neg ψ))
+
+  def or (φ ψ : Formula PROP) : Formula PROP := imp (neg φ) ψ
+
+  def iff (φ ψ : Formula PROP) : Formula PROP := and (imp φ ψ) (imp ψ φ)
+
+  def dia (φ : Formula PROP) : Formula PROP := neg (box (neg φ))
+
+end Formula
+
+structure KripkeModel (PROP : Type) where
+  World         : Type
+  accessibility : World → World → Prop
+  valuation : PROP → (World → Prop)
+
+def Forces {PROP : Type} (M : KripkeModel PROP) (w : M.World) : Formula PROP → Prop
+  | Formula.var p     => (M.valuation p) w
+  | Formula.false_    => False
+  | Formula.imp φ ψ   => (Forces M w φ) → (Forces M w ψ)
+  | Formula.box φ     => ∀ (v : M.World), M.accessibility w v → Forces M v φ
+
+def IsTheorem {PROP : Type} (φ : Formula PROP) : Prop :=
+  ∀ (M : KripkeModel PROP) (w : M.World), Forces M w φ
+
+
+section
+
+  def p : Formula String := Formula.var "p"
+  def q : Formula String := Formula.var "q"
+  def r : Formula String := Formula.var "r"
+
+  -- ◫ p → ◫ (p ∨ q)
+  theorem box_p_imp_box_p_or_q : IsTheorem (Formula.imp (Formula.box p) (Formula.box (Formula.or p q))) :=
+    fun (M : KripkeModel String) (w : M.World) =>
+      fun(h1 : Forces M w (Formula.box p)) =>
+        fun(v : M.World) =>
+          fun(h2 : M.accessibility w v) =>
+            let h3 : Forces M v p := h1 v h2
+            fun (neg_p : Forces M v (Formula.neg p)) =>
+              let h_false := neg_p h3
+              False.elim h_false
+
+   -- ◫ (p → q) → (◫ p → ◫ q)
+   theorem box_p_imp_q_imp_box_p_imp_box_q : IsTheorem (Formula.imp (Formula.box (Formula.imp p q)) (Formula.imp (Formula.box p) (Formula.box q))) :=
+    fun (M : KripkeModel String) (w : M.World) =>
+      fun(h1 : Forces M w (Formula.box (Formula.imp p q))) =>
+        fun(h2 : Forces M w (Formula.box p)) =>
+          fun(v : M.World) (h3 : M.accessibility w v) =>
+            let h4 : Forces M v (Formula.imp p q) := h1 v h3
+            let h5 : Forces M v p := h2 v h3
+            h4 h5
+
+    theorem and_elim_left : IsTheorem (Formula.imp (Formula.and p q) p) :=
+    sorry
+      --fun M w h_and =>
+        --Classical.by_contradiction fun h_neg_p =>
+          --h_and fun h_p =>
+            --show Forces M w (Formula.neg q) from
+            --fun _ => h_neg_p h_p
+
+    theorem and_elim_right  : IsTheorem (Formula.imp (Formula.and p q) q) :=
+      sorry
+      --fun M w h_and =>
+        --Classical.by_contradiction fun h_neg_q =>
+          --h_and fun h_p =>
+            --show Forces M w (Formula.neg q) from
+            --fun h_q => h_neg_q h_q
+
+    theorem or_elim
+    (φ ψ χ : Formula String)
+    (M : KripkeModel String) (w : M.World)
+    (h1 : Forces M w (Formula.or φ ψ))
+    (h2 : Forces M w (Formula.imp φ χ))
+    (h3 : Forces M w (Formula.imp ψ χ))
+    : Forces M w χ :=
+      Classical.byCases
+      (
+        fun (h_p : Forces M w φ) => h2 h_p
+      )
+      (
+        fun (h_neg_p : Forces M w (Formula.neg φ)) =>
+          let h_q : Forces M w ψ := h1 h_neg_p
+          h3 h_q
+      )
+
+
+
+    -- ◫ (p ∧ q) → ◫ p ∧ ◫ q
+    theorem box_p_and_q : IsTheorem (Formula.imp (Formula.box (Formula.and p q)) (Formula.and (Formula.box p) (Formula.box q))) :=
+      fun(M : KripkeModel String) (w : M.World) =>                  -- take arbitrary model M and its world W
+        fun(h1 : Forces M w (Formula.box (Formula.and p q))) =>     -- suppose that ◫ (p ∧ q)
+          fun(h2 : Forces M w (Formula.imp (Formula.box p) (Formula.neg (Formula.box q)))) => -- unfold AND and show False from it
+
+            let h3 : Forces M w (Formula.box p) :=                  -- proof that ◫ p from ◫ (p ∧ q)
+              fun(v : M.World) (h3_1 : M.accessibility w v) =>
+                let h3_2 : Forces M v (Formula.and p q) := h1 v h3_1
+                and_elim_left M v h3_2
+
+            let h4 : Forces M w (Formula.box q) :=                  -- proof that ◫ q from ◫ (p ∧ q)
+              fun(v : M.World) (h4_1 : M.accessibility w v) =>
+                let h4_2 : Forces M v (Formula.and p q) := h1 v h4_1
+                and_elim_right M v h4_2
+
+            let neg_box_q : Forces M w (Formula.neg (Formula.box q)):= h2 h3
+
+            neg_box_q h4
+
+    -- ◫ (p ∨ q), ◫ (p → r), ◫ (q → r) | ◫ r
+    theorem p_or_q_box_r
+    (M : KripkeModel String) (w : M.World)
+    (h1 : Forces M w (Formula.box (Formula.or p q)))
+    (h2 : Forces M w (Formula.box (Formula.imp p r)))
+    (h3 : Forces M w (Formula.box (Formula.imp q r)))
+    : Forces M w (Formula.box r) :=
+      fun(v : M.World)(h4 : M.accessibility w v) =>
+        let q_or_r : Forces M v (Formula.or p q) := h1 v h4
+        let p_imp_r : Forces M v (Formula.imp p r) := h2 v h4
+        let q_imp_r : Forces M v (Formula.imp q r) := h3 v h4
+        or_elim p q r M v q_or_r p_imp_r q_imp_r
+
+    -- ◫ p ∨ ◫ q | ◫ (p ∨ q)
+    theorem box_p_or_box_q
+    (M : KripkeModel String) (w : M.World)
+    (h : Forces M w (Formula.or (Formula.box p) (Formula.box q)))
+    : Forces M w (Formula.box (Formula.or p q)) :=
+      fun(v : M.World)(h4 : M.accessibility w v) =>
+      let q_or_r : Forces M v (Formula.or p q) :=
+        Classical.byCases
+        (
+          fun(box_p : Forces M v (Formula.box p)) => sorry
+        )
+        (
+          fun(neg_p : Forces M v (Formula.neg (Formula.box p))) => sorry
+        )
+      let p_r : Forces M v (Formula.imp p (Formula.or p q)) := sorry
+      let q_r : Forces M v (Formula.imp q (Formula.or p q)) := sorry
+      or_elim p q (Formula.or p q) M v q_or_r p_r q_r
+
+end
