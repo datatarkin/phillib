@@ -7,6 +7,6 @@
 
 import phillib.Ontology.Basic
 
-class BerkeleanOntology extends Ontology where
+class BerkeleanOntology extends Ontology, FreeLogic Entity where
   physical_is_idea : ∀ e, IsPhysical e → IsIdea e
-  esse_est_percipi : ∀ e, IsIdea e → (Being e ↔ ∃ m, Percepts m e)
+  esse_est_percipi : ∀ e, IsIdea e → (E e ↔ ∃ m, Percepts m e)

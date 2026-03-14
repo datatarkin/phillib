@@ -6,3 +6,4 @@ import phillib.Modal.S4
 import phillib.Modal.S5
 import phillib.Ontology.Basic
 import phillib.Ontology.Berkeley
+import phillib.FreeLogic.Basic
